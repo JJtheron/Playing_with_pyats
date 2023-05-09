@@ -18,7 +18,6 @@ class Crawl_create:
     
 
     def _get_cdp_info(self,testbed):
-        self.visited_switches.append(self.current_device)
         command = 'show cdp nei detail'
         try:
             dev = testbed.devices[self.current_device]
@@ -27,9 +26,11 @@ class Crawl_create:
             cdp = dev.default.execute(command)
             dev.disconnect()
             cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
+            self.visited_switches.append(dev.hostname)
             return cdp_parsed
         except Exception as e:
-            sys.stderr.write(f"Could not connect to device {self.current_device} Error is {e}")  
+            psys.stderr.write(f"Could not connect to device {self.current_device} Error is {e}")  
+            self.visited_switches.append(self.current_device)
             #traceback.print_exc() 
             return {}
 
@@ -38,19 +39,20 @@ class Crawl_create:
             software_version = cdp_object["index"][index]["software_version"] 
             try: 
                 ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
-                print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
-                if cdp_object['index'][index]['device_id'] not in list(testbed.devices.keys()):
-                    my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-                    new_device = Device(cdp_object['index'][index]['device_id'],
-                                     os = my_os,
-                                     connections = {'cli':
-                                                    {'protocol':'ssh',
-                                                  'ip' : ip_address}},
-                                    credentials = testbed.devices[self.current_device].credentials,
-                                    )
-                    testbed.add_device(new_device)
             except:
-                print("No Management address")
+                print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
+                return testbed
+
+            if cdp_object['index'][index]['device_id'] not in list(testbed.devices.keys()):
+                my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
+                new_device = Device(cdp_object['index'][index]['device_id'],
+                                 os = my_os,
+                                 connections = {'cli':
+                                                {'protocol':'ssh',
+                                              'ip' : ip_address}},
+                                credentials = testbed.devices[self.current_device].credentials,
+                                )
+                testbed.add_device(new_device)
         return testbed
 
     def create_yml_file_from_topology(self,testbed):
@@ -75,7 +77,21 @@ class Crawl_create:
         with open(f"{testbed.name}.yml", 'w') as tbfile:
             yaml.dump(topology_dict,tbfile)
         return topology_dict
+
+    def create_hosts_file_ansible(self,testbed):
+        ansible_hosts = {"all":{"hosts":{}}}
+        for device in testbed.devices:
+            try:
+                my_ip = str(testbed.devices[device].connections.cli.ip)
+            except:
+                my_ip = testbed.devices[device].connections.cli.ip
+            ansible_hosts["all"]["hosts"][device] = {"ansible_host": my_ip }
+        
     
+        with open(f"ansible_{testbed.name}.yml", 'w') as tbfile:
+            yaml.dump(ansible_hosts,tbfile)
+        return ansible_hosts
+
     def cdp_crawler(self,testbed):
         dev_compy = testbed.devices.copy()
         cdp = {}
@@ -94,4 +110,4 @@ if __name__ == "__main__":
     cr = Crawl_create('SantiamCORP.yaml')
     tb = cr.cdp_crawler(cr.testbed)
     cr.create_yml_file_from_topology(tb)
-
+    cr.create_hosts_file_ansible(tb)
