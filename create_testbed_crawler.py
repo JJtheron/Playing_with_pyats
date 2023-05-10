@@ -26,24 +26,29 @@ class Crawl_create:
             cdp = dev.default.execute(command)
             dev.disconnect()
             cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
-            self.visited_switches.append(dev.hostname)
+            if dev.hostname == self.current_device:
+                self.visited_switches.append(dev.hostname)
+            else:
+                self.visited_switches.append(dev.hostname)
+                self.visited_switches.append(self.current_device)
+
             return cdp_parsed
         except Exception as e:
-            psys.stderr.write(f"Could not connect to device {self.current_device} Error is {e}")  
+            sys.stderr.write(f"Could not connect to device {self.current_device} Error is {e}")  
             self.visited_switches.append(self.current_device)
             #traceback.print_exc() 
             return {}
 
     def _add_cdp_device_to_testbed(self, cdp_object,testbed):
+        ip_address = ""
         for index in cdp_object['index']:
             software_version = cdp_object["index"][index]["software_version"] 
             try: 
                 ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
             except:
+                ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
-                return testbed
-
-            if cdp_object['index'][index]['device_id'] not in list(testbed.devices.keys()):
+            if cdp_object['index'][index]['device_id'] not in list(testbed.devices.keys()) and ip_address:
                 my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
                 new_device = Device(cdp_object['index'][index]['device_id'],
                                  os = my_os,
